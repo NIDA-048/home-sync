@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -333,8 +333,6 @@ function SidebarContent({
 
 export default function FeedbackPage() {
   const router = useRouter();
-  const searchParams =
-    useSearchParams();
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
@@ -479,10 +477,13 @@ export default function FeedbackPage() {
   }, []);
 
   useEffect(() => {
-    const feedbackId =
-      searchParams.get(
-        "feedbackId",
+    const params =
+      new URLSearchParams(
+        window.location.search,
       );
+
+    const feedbackId =
+      params.get("feedbackId");
 
     if (
       feedbackId &&
@@ -499,10 +500,7 @@ export default function FeedbackPage() {
         openDetails(item);
       }
     }
-  }, [
-    searchParams,
-    feedback,
-  ]);
+  }, [feedback]);
 
   async function loadHouseholdRole() {
     try {
