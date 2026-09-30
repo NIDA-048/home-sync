@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum HouseholdMemberRole {
+  OWNER
+  MEMBER
+}
+
+enum TaskRule {
+  TEMPORARY
+  RECURRING
+  PERMANENT
+}
+
+enum TaskAssignmentMode {
+  ALL
+  SELECTED
+  PERMANENT
+}
+
+enum TaskStatus {
+  TO_DO
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum TaskFrequency {
+  DAILY
+  EVERY_2_DAYS
+  EVERY_3_DAYS
+  WEEKLY
+  EVERY_2_WEEKS
+  CUSTOM
+}
+
+enum CompletionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum FeedbackCategory {
+  HOUSEHOLD
+  TASKS
+  FAIRNESS
+  SUGGESTIONS
+  OTHER
+}
+
+enum FeedbackStatus {
+  NEW
+  REVIEWED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_DUE_SOON
+  TASK_COMPLETED
+  TASK_REASSIGNED
+  FEEDBACK_ACTIVITY
+  REMINDER
+  GENERAL
+}
+
+enum ReminderType {
+  PERSONAL
+  HOUSEHOLD
+}
+
+// ======================================================
+// USER
+// ======================================================
+
+model User {
+  id       String  @id @default(cuid())
+  name     String
+  email    String  @unique
+  password String
+  imageUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  householdMemberships HouseholdMember[]
+  createdTasks         Task[]            @relation("TaskCreator")
+  assignments          TaskAssignment[]
+  completions          TaskCompletion[]
+  feedbacks            Feedback[]
+  feedbackReplies      FeedbackReply[]
+  notifications        Notification[]
+  reminders            Reminder[]
+}
+
+// ======================================================
+// HOUSEHOLD
+// ======================================================
+
+model Household {
+  id             String @id @default(cuid())
+  name           String
+  invitationCode String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       HouseholdMember[]
+  tasks         Task[]
+  feedbacks     Feedback[]
+  notifications Notification[]
+  reminders     Reminder[]
+}
+
+// ======================================================
+// HOUSEHOLD MEMBER
+// ======================================================
+
+model HouseholdMember {
+  id          String              @id @default(cuid())
+  householdId String
+  userId      String
+  role        HouseholdMemberRole @default(MEMBER)
+
+  joinedAt DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@index([householdId])
+  @@index([userId])
+}
+
+// ======================================================
+// TASK
+// ======================================================
+
+model Task {
+  id          String @id @default(cuid())
+  householdId String
+  createdById String
+
+  title       String
+  description String?
+
+  rule           TaskRule
+  assignmentMode TaskAssignmentMode
+
+  difficulty TaskDifficulty @default(MEDIUM)
+  frequency  TaskFrequency?
+
+  customDays String[] @default([])
+
+  scheduledDate DateTime?
+  dueDate       DateTime?
+
+  estimatedMinutes Int?
+
+  status TaskStatus @default(TO_DO)
+
+  isActive Boolean @default(true)
+
+  recurrenceGroupId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  assignments TaskAssignment[]
+  rotation    TaskRotation?
+  completions TaskCompletion[]
+  evidence    TaskEvidence[]
+
+  @@unique([recurrenceGroupId, scheduledDate])
+  @@index([householdId])
+  @@index([createdById])
+  @@index([status])
+  @@index([dueDate])
+  @@index([recurrenceGroupId])
+}
+
+// ======================================================
+// TASK ASSIGNMENT
+// ======================================================
+
+model TaskAssignment {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+
+  assignedAt DateTime @default(now())
+
+  rotationPosition Int?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+// ======================================================
+// TASK ROTATION
+// ======================================================
+
+model TaskRotation {
+  id     String @id @default(cuid())
+  taskId String @unique
+
+  nextPosition  Int       @default(0)
+  rotationCount Int       @default(0)
+  lastRotatedAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// ======================================================
+// TASK COMPLETION
+// ======================================================
+
+model TaskCompletion {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+
+  status CompletionStatus @default(PENDING)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  timeTakenMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+// ======================================================
+// TASK EVIDENCE
+// ======================================================
+
+model TaskEvidence {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+
+  fileUrl String
+
+  fileName String?
+  mimeType String?
+  fileSize Int?
+
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+// ======================================================
+// FEEDBACK
+// ======================================================
+
+model Feedback {
+  id          String  @id @default(cuid())
+  householdId String
+  userId      String?
+
+  category FeedbackCategory
+  message  String
+  status   FeedbackStatus @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  replies FeedbackReply[]
+
+  @@index([householdId])
+  @@index([status])
+}
+
+// ======================================================
+// FEEDBACK REPLY
+// ======================================================
+
+model FeedbackReply {
+  id         String @id @default(cuid())
+  feedbackId String
+  userId     String
+
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId])
+  @@index([userId])
+}
+
+// ======================================================
+// NOTIFICATION
+// ======================================================
+
+model Notification {
+  id          String  @id @default(cuid())
+  userId      String
+  householdId String?
+
+  type    NotificationType
+  title   String
+  message String
+
+  isRead Boolean @default(false)
+
+  relatedTaskId     String?
+  relatedFeedbackId String?
+
+  createdAt DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([householdId])
+  @@index([isRead])
+}
+
+// ======================================================
+// REMINDERS
+// ======================================================
+
+model Reminder {
+  id          String  @id @default(cuid())
+  userId      String
+  householdId String?
+
+  title       String
+  description String?
+
+  date DateTime
+  time String
+
+  type ReminderType @default(PERSONAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([householdId])
+  @@index([date])
+}
